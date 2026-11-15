@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Probeklausuraufgabe 1 – Glaspyramide – Simulation</title>
+<!--
+  Probeklausuraufgabe 1 – Glaspyramide – interaktive 3D-Ansicht zur Probeklausuraufgabe (Ebenen, Q1 Mathe LK)
+  Eine Datei, läuft offline per Doppelklick. Erzeugt mit quelle/baue.py aus
+  kern.html (Gerüst, Baukasten, 3D-Darstellung) + modell_1.js (Inhalt der Aufgabe).
+-->
+<style>
+  :root {
+    --hg: #ffffff; --flaeche: #f4f6f9; --rand: #d5dbe3; --text: #1b2430; --text2: #5a6675;
+    --akzent: #1f5c99;
+    --e-pot: #1f77b4; --e-kin: #d95f02; --e-th: #7b3294; --e-ges: #2b2b2b;
+    --kurve1: #1f5c99; --kurve2: #c62828; --kurve3: #2e7d32;
+    --ok: #2e7d32; --nein: #c62828;
+    --schrift: system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--flaeche); color: var(--text); font-family: var(--schrift);
+         font-size: 1rem; line-height: 1.4; }
+  body.gross { font-size: 1.25rem; }
+  header { display: flex; align-items: center; gap: .8em; padding: .5em 1em;
+           background: var(--akzent); color: #fff; flex-wrap: wrap; }
+  header h1 { font-size: 1.3em; margin: 0; font-weight: 600; flex: 1 1 auto; }
+  header button { background: rgba(255,255,255,.15); color: #fff; border-color: rgba(255,255,255,.4); }
+  main { display: grid; gap: .8em; padding: .8em;
+         grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+         grid-template-areas: "teile teile" "szene rechnung" "steuerung regler" "info info"; }
+  @media (max-width: 900px) {
+    main { grid-template-columns: minmax(0, 1fr);
+           grid-template-areas: "teile" "szene" "steuerung" "regler" "rechnung" "info"; }
+  }
+  .karte { background: var(--hg); border: 1px solid var(--rand); border-radius: 10px; padding: .7em;
+           min-width: 0; }
+  .karte h2 { font-size: 1em; margin: 0 0 .4em; color: var(--text2); font-weight: 600; }
+  #teileKarte { grid-area: teile; } #szeneKarte { grid-area: szene; } #rechnungKarte { grid-area: rechnung; }
+  #steuerKarte { grid-area: steuerung; } #reglerKarte { grid-area: regler; } #infoKarte { grid-area: info; }
+  canvas { display: block; width: 100%; touch-action: none; }
+  #szene { height: 60vh; min-height: 320px; cursor: grab; border-radius: 6px; }
+  #szene:active { cursor: grabbing; }
+  button { font: inherit; font-size: 1em; padding: .45em .9em; min-height: 2.6em; min-width: 2.6em;
+           border-radius: 8px; border: 1px solid var(--rand); background: var(--hg); color: var(--text);
+           cursor: pointer; }
+  button:hover { border-color: var(--akzent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.haupt { background: var(--akzent); color: #fff; border-color: var(--akzent); font-weight: 600; }
+  button.aktiv { outline: 3px solid var(--akzent); outline-offset: 1px; }
+  .zeile { display: flex; flex-wrap: wrap; gap: .5em; align-items: center; }
+  #teilKnoepfe button { min-width: 3.4em; font-weight: 600; }
+  #teilKnoepfe button.aktiv { background: var(--akzent); color: #fff; outline: none; }
+  .messwerte { display: grid; grid-template-columns: repeat(auto-fit, minmax(13em, 1fr)); gap: .3em .8em;
+               margin-top: .6em; font-variant-numeric: tabular-nums; }
+  .messwerte div { background: var(--flaeche); border-radius: 6px; padding: .25em .5em; }
+  .messwerte b { font-weight: 600; }
+  .messwerte .ja { color: var(--ok); font-weight: 600; } .messwerte .nein { color: var(--nein); font-weight: 600; }
+  .regler { display: grid; grid-template-columns: repeat(auto-fit, minmax(14em, 1fr)); gap: .6em 1.4em; }
+  .regler label { display: block; font-weight: 600; }
+  .regler .wert { float: right; font-weight: 400; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; height: 2.2em; accent-color: var(--akzent); }
+  #aufgabeText { background: #eef4fb; border-left: 5px solid var(--akzent); border-radius: 6px;
+                 padding: .5em .7em; margin-bottom: .6em; }
+  #rechnung { max-height: 46vh; overflow-y: auto; }
+  #rechnung .rz { padding: .3em 0; border-bottom: 1px dashed var(--rand); }
+  #rechnung .rz:last-child { border-bottom: none; }
+  .ergebnis { color: var(--ok); font-weight: 600; }
+  .falsch { color: var(--nein); font-weight: 600; }
+  .vek { display: inline-flex; flex-direction: column; vertical-align: middle; text-align: center;
+         border-left: 2px solid currentColor; border-right: 2px solid currentColor; border-radius: 7px;
+         padding: 0 .35em; margin: .1em .15em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+  .pf { position: relative; display: inline-block; }
+  .pf::before { content: ""; position: absolute; left: .05em; right: .1em; top: .02em; border-top: .09em solid currentColor; }
+  .pf::after { content: ""; position: absolute; right: -.08em; top: -.17em; border: .2em solid transparent;
+               border-left: .32em solid currentColor; border-right: 0; }
+  .legende { display: flex; flex-wrap: wrap; gap: .3em 1em; margin-top: .4em; }
+  .legende span { white-space: nowrap; }
+  .farbstrich { display: inline-block; width: 1.4em; height: .3em; border-radius: 2px; vertical-align: middle; margin-right: .3em; }
+  details summary { cursor: pointer; font-weight: 600; }
+  .klein { color: var(--text2); font-size: .85em; }
+  kbd { border: 1px solid var(--rand); border-bottom-width: 2px; border-radius: 4px; padding: 0 .3em;
+        font-size: .85em; background: var(--flaeche); }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="titel">Probeklausuraufgabe 1 – Glaspyramide</h1>
+  <button id="btnGross" title="Große Schrift für den Beamer (G)">Beamer-Ansicht</button>
+  <button id="btnVoll" title="Vollbild (F)">Vollbild</button>
+</header>
+
+<main>
+  <section class="karte" id="teileKarte">
+    <div class="zeile">
+      <b>Teilaufgabe:</b>
+      <span class="zeile" id="teilKnoepfe"></span>
+      <span class="zeile" style="margin-left:auto">
+        <button id="btnTeilZurueck" title="vorige Teilaufgabe (Bild ↑)">◀</button>
+        <button id="btnTeilWeiter" title="nächste Teilaufgabe (Bild ↓)">▶</button>
+      </span>
+    </div>
+  </section>
+
+  <section class="karte" id="szeneKarte">
+    <h2>3D-Ansicht</h2>
+    <canvas id="szene" aria-label="Drehbare 3D-Ansicht der Aufgabe"></canvas>
+    <div class="legende klein" id="legende"></div>
+    <p class="klein">Ziehen mit Maus oder Finger dreht die Ansicht · Mausrad oder zwei Finger zoomen ·
+      Doppelklick setzt die Ansicht zurück.</p>
+  </section>
+
+  <section class="karte" id="rechnungKarte">
+    <h2>Aufgabe und Rechnung</h2>
+    <div id="aufgabeText"></div>
+    <div class="zeile">
+      <button id="btnZeile" class="haupt" title="nächste Rechenzeile aufdecken (N)">nächste Zeile ▼</button>
+      <button id="btnAlle" title="ganze Rechnung zeigen (A)">alles zeigen</button>
+      <button id="btnVerdecken" title="Rechnung verdecken (V)">verdecken</button>
+    </div>
+    <div id="rechnung"></div>
+  </section>
+
+  <section class="karte" id="steuerKarte">
+    <div class="zeile">
+      <button id="btnStart" class="haupt" title="Animation Start/Pause (Leertaste)">▶ Start</button>
+      <button id="btnSchritt" title="Einzelschritt (→)">Einzelschritt</button>
+      <button id="btnReset" title="Teilaufgabe zurücksetzen (R)">↺ Zurücksetzen</button>
+      <button id="btnLangsam" title="Zeitlupe umschalten (L)">Zeitlupe: aus</button>
+    </div>
+    <div class="zeile" style="margin-top:.5em">
+      <button id="btnDrehen" title="Ansicht beim Abspielen langsam drehen (D)">Drehen: an</button>
+      <button id="btnHeft" title="Ansicht wie das Schrägbild im Heft (H)">Heft-Ansicht</button>
+      <button id="btnAnsicht" title="Ansicht zurücksetzen">Ansicht zurücksetzen</button>
+      <button id="btnPNG" title="Bild der 3D-Ansicht speichern">Bild speichern (PNG)</button>
+    </div>
+    <div class="messwerte" id="messwerte"></div>
+  </section>
+
+  <section class="karte" id="reglerKarte">
+    <h2>Einstellungen</h2>
+    <div class="regler" id="regler"></div>
+    <p class="klein" id="reglerLeer">Bei dieser Teilaufgabe gibt es nichts einzustellen. Drehen Sie die Ansicht
+      und decken Sie die Rechnung Zeile für Zeile auf.</p>
+  </section>
+
+  <section class="karte" id="infoKarte">
+    <details>
+      <summary>Was wird hier gezeigt?</summary>
+      <div id="infoText"></div>
+    </details>
+    <p class="klein">Tastatur: <kbd>Leertaste</kbd> Start/Pause · <kbd>R</kbd> Zurücksetzen ·
+      <kbd>→</kbd> Einzelschritt · <kbd>L</kbd> Zeitlupe · <kbd>N</kbd> nächste Zeile · <kbd>A</kbd> alles zeigen ·
+      <kbd>Bild ↑</kbd>/<kbd>Bild ↓</kbd> Teilaufgabe · <kbd>D</kbd> Drehen · <kbd>H</kbd> Heft-Ansicht ·
+      <kbd>G</kbd> Beamer-Ansicht · <kbd>F</kbd> Vollbild</p>
+  </section>
+</main>
+
+<script>
+"use strict";
+/* =====================================================================
+   BAUKASTEN – allgemein verwendbar, in neuen Simulationen unverändert lassen
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+/** Schriftgröße auf der Leinwand – wächst in der Beamer-Ansicht mit */
+const fs = px => Math.round(px * (document.body.classList.contains("gross") ? 1.3 : 1));
+
+/** Zahl deutsch formatieren: fmt(1.234, 2, "m") -> "1,23 m" */
+function fmt(x, stellen = 2, einheit = "") {
+  if (!isFinite(x)) return "–";
+  const s = x.toLocaleString("de-DE", { minimumFractionDigits: stellen, maximumFractionDigits: stellen });
+  return einheit ? s + " " + einheit : s;
+}
+
+/** Canvas mit scharfer Darstellung (HiDPI). Liefert {ctx, b, h} in CSS-Pixeln, passt sich an. */
+function leinwand(canvas, beiGroesse) {
+  const obj = { canvas, ctx: canvas.getContext("2d"), b: 0, h: 0 };
+  const anpassen = (melden = true) => {
+    const r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    obj.b = Math.max(1, r.width); obj.h = Math.max(1, r.height);
+    canvas.width = Math.round(obj.b * dpr); canvas.height = Math.round(obj.h * dpr);
+    obj.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (melden && beiGroesse) beiGroesse();
+  };
+  anpassen(false);                       // Größe sofort setzen, Neuzeichnen erst bei Änderungen
+  new ResizeObserver(() => anpassen()).observe(canvas);
+  return obj;
+}
+
+/** Pfeil zeichnen (für Kräfte, Geschwindigkeiten, Maße) */
+function pfeil(ctx, x1, y1, x2, y2, farbe, breite = 3, spitze = 12) {
+  const w = Math.atan2(y2 - y1, x2 - x1), l = Math.hypot(x2 - x1, y2 - y1);
+  if (l < 1) return;
+  const s = Math.min(spitze, l * 0.6);
+  ctx.save(); ctx.strokeStyle = ctx.fillStyle = farbe; ctx.lineWidth = breite; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - s * 0.7 * Math.cos(w), y2 - s * 0.7 * Math.sin(w)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - s * Math.cos(w - 0.4), y2 - s * Math.sin(w - 0.4));
+  ctx.lineTo(x2 - s * Math.cos(w + 0.4), y2 - s * Math.sin(w + 0.4)); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+/** Text mit Hintergrund (gut lesbar über Linien) */
+function beschriftung(ctx, text, x, y, { farbe = "#1b2430", groesse = 15, ausrichtung = "center",
+                                        grundlinie = "middle", fett = false, hintergrund = true } = {}) {
+  ctx.save(); groesse = fs(groesse); ctx.font = `${fett ? "600 " : ""}${groesse}px ${css("--schrift")}`;
+  ctx.textAlign = ausrichtung; ctx.textBaseline = grundlinie;
+  const m = ctx.measureText(text), pad = 3;
+  let x0 = ausrichtung === "center" ? x - m.width / 2 : ausrichtung === "right" ? x - m.width : x;
+  if (hintergrund) { ctx.fillStyle = "rgba(255,255,255,.85)";
+    ctx.fillRect(x0 - pad, y - groesse * 0.6 - pad, m.width + 2 * pad, groesse * 1.2 + 2 * pad); }
+  ctx.fillStyle = farbe; ctx.fillText(text, x, y); ctx.restore();
+}
+
+/** "Schöne" Achsenteilung */
+function teilung(min, max, ziel = 6) {
+  const roh = (max - min) / ziel, p = Math.pow(10, Math.floor(Math.log10(roh)));
+  const f = roh / p, schritt = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
+  const t = []; for (let v = Math.ceil(min / schritt) * schritt; v <= max + 1e-9 * schritt; v += schritt) t.push(v);
+  return { t, schritt, stellen: Math.max(0, -Math.floor(Math.log10(schritt) + 1e-9)) };
+}
+
+/**
+ * Live-Diagramm (Zeitreihen). Beispiel:
+ *   const d = new Diagramm(canvas, {xName:"t", xEinheit:"s", yName:"x", yEinheit:"m", fenster:10});
+ *   d.reihe("x", "Auslenkung", "#1f5c99");  d.punkt("x", t, x);  d.zeichnen();
+ * fenster = sichtbare Zeitspanne (mitlaufend); yMin/yMax fest oder automatisch.
+ */
+class Diagramm {
+  constructor(canvas, opt) {
+    this.o = Object.assign({ xName: "t", xEinheit: "s", yName: null, yEinheit: "", fenster: 10,
+                             yMin: null, yMax: null }, opt);
+    this.reihen = new Map(); this.lw = leinwand(canvas, () => this.zeichnen());
+  }
+  /** name = Text für den Knopf, achse = Achsenbeschriftung, z. B. "s in cm" */
+  reihe(id, name, farbe, sichtbar = true, achse = name) { this.reihen.set(id, { name, farbe, sichtbar, achse, d: [] }); }
+  punkt(id, x, y) { const r = this.reihen.get(id); r.d.push([x, y]); if (r.d.length > 20000) r.d.splice(0, 5000); }
+  leeren() { for (const r of this.reihen.values()) r.d = []; }
+  achsen(opt) { Object.assign(this.o, opt); }
+  zeichnen() {
+    const { ctx, b, h } = this.lw, o = this.o, R = { l: 62, r: 14, o: 18, u: 46 };
+    ctx.clearRect(0, 0, b, h);
+    const sicht = [...this.reihen.values()].filter(r => r.sichtbar);
+    let xMax = 0; for (const r of sicht) if (r.d.length) xMax = Math.max(xMax, r.d[r.d.length - 1][0]);
+    const x1 = Math.max(o.fenster, xMax), x0 = x1 - o.fenster;
+    let y0 = o.yMin, y1 = o.yMax;
+    if (y0 === null || y1 === null) {
+      let lo = Infinity, hi = -Infinity;
+      for (const r of sicht) for (const [x, y] of r.d) if (x >= x0) { lo = Math.min(lo, y); hi = Math.max(hi, y); }
+      if (!isFinite(lo)) { lo = -1; hi = 1; }
+      if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
+      const rand = 0.1 * (hi - lo);
+      if (y0 === null) y0 = lo - rand; if (y1 === null) y1 = hi + rand;
+    }
+    const X = x => R.l + (x - x0) / (x1 - x0) * (b - R.l - R.r);
+    const Y = y => h - R.u - (y - y0) / (y1 - y0) * (h - R.o - R.u);
+    ctx.font = `${fs(13)}px ${css("--schrift")}`; ctx.lineWidth = 1;
+    const tx = teilung(x0, x1, Math.max(3, Math.floor(b / 90))), ty = teilung(y0, y1, Math.max(3, Math.floor(h / 55)));
+    ctx.strokeStyle = "#e3e7ec"; ctx.fillStyle = "#5a6675";
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (const v of tx.t) { ctx.beginPath(); ctx.moveTo(X(v), R.o); ctx.lineTo(X(v), h - R.u); ctx.stroke();
+                            ctx.fillText(fmt(v, tx.stellen), X(v), h - R.u + 5); }
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (const v of ty.t) { ctx.beginPath(); ctx.moveTo(R.l, Y(v)); ctx.lineTo(b - R.r, Y(v)); ctx.stroke();
+                            ctx.fillText(fmt(v, ty.stellen), R.l - 6, Y(v)); }
+    // Achsen (Nulllinie hervorheben)
+    ctx.strokeStyle = "#1b2430"; ctx.lineWidth = 1.5; ctx.beginPath();
+    const yNull = (y0 < 0 && y1 > 0) ? Y(0) : h - R.u;
+    ctx.moveTo(R.l, yNull); ctx.lineTo(b - R.r, yNull); ctx.moveTo(R.l, R.o); ctx.lineTo(R.l, h - R.u); ctx.stroke();
+    ctx.fillStyle = "#1b2430"; ctx.font = `600 ${fs(14)}px ${css("--schrift")}`;
+    ctx.textAlign = "right"; ctx.textBaseline = "bottom";
+    ctx.fillText(`${o.xName} in ${o.xEinheit}`, b - R.r, h - 4);
+    ctx.save(); ctx.translate(14, R.o); ctx.rotate(-Math.PI / 2); ctx.textAlign = "right"; ctx.textBaseline = "top";
+    const yText = o.yName ? (o.yEinheit ? `${o.yName} in ${o.yEinheit}` : o.yName) : sicht.map(r => r.achse).join(",  ");
+    ctx.fillText(yText, 0, 0); ctx.restore();
+    // Kurven
+    ctx.save(); ctx.beginPath(); ctx.rect(R.l, R.o, b - R.l - R.r, h - R.o - R.u); ctx.clip();
+    for (const r of sicht) {
+      ctx.strokeStyle = r.farbe; ctx.lineWidth = 2.5; ctx.beginPath(); let an = false;
+      for (const [x, y] of r.d) { if (x < x0 - 1e-9) continue; an ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)); an = true; }
+      ctx.stroke();
+      if (r.d.length) { const [x, y] = r.d[r.d.length - 1]; ctx.fillStyle = r.farbe;
+                        ctx.beginPath(); ctx.arc(X(x), Y(y), 4.5, 0, 7); ctx.fill(); }
+    }
+    ctx.restore();
+  }
+  /** Knöpfe zum Ein-/Ausblenden der Kurven in ein Element einfügen */
+  auswahl(el) {
+    el.innerHTML = "";
+    for (const [id, r] of this.reihen) {
+      const k = document.createElement("button");
+      k.innerHTML = `<span style="color:${r.farbe}">━━</span> ${r.name}`;
+      k.classList.toggle("aktiv", r.sichtbar);
+      k.onclick = () => { r.sichtbar = !r.sichtbar; k.classList.toggle("aktiv", r.sichtbar); this.zeichnen(); };
+      el.appendChild(k);
+    }
+  }
+}
+
+/**
+ * Energiebalken. Beispiel:
+ *   const eb = new Balken(canvas, [{id:"pot", name:"E_Spann", farbe:css("--e-pot")}, ...], "J");
+ *   eb.zeichnen({pot: 0.2, kin: 0.1, ges: 0.3}, maxWert);
+ */
+class Balken {
+  constructor(canvas, arten, einheit = "J") { this.arten = arten; this.einheit = einheit;
+    this.lw = leinwand(canvas, () => this.letzte && this.zeichnen(...this.letzte)); }
+  zeichnen(werte, max) {
+    this.letzte = [werte, max];
+    const { ctx, b, h } = this.lw, n = this.arten.length, R = { l: 10, r: 10, o: 26, u: 30 };
+    ctx.clearRect(0, 0, b, h);
+    const bw = (b - R.l - R.r) / n, H = h - R.o - R.u, sk = max > 0 ? H / max : 0;
+    ctx.strokeStyle = "#1b2430"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(R.l, h - R.u); ctx.lineTo(b - R.r, h - R.u); ctx.stroke();
+    this.arten.forEach((a, i) => {
+      const v = Math.max(0, werte[a.id] || 0), x = R.l + i * bw + bw * 0.18, w = bw * 0.64;
+      ctx.fillStyle = a.farbe; ctx.fillRect(x, h - R.u - v * sk, w, v * sk);
+      ctx.font = `600 ${fs(14)}px ${css("--schrift")}`; ctx.fillStyle = "#1b2430"; ctx.textAlign = "center";
+      ctx.textBaseline = "top"; ctx.fillText(a.name, x + w / 2, h - R.u + 6);
+      ctx.textBaseline = "bottom"; ctx.font = `${fs(13)}px ${css("--schrift")}`;
+      ctx.fillText(fmt(werte[a.id] || 0, a.stellen ?? 2, this.einheit), x + w / 2, Math.max(R.o + 2, h - R.u - v * sk - 4));
+    });
+  }
+}
+
+/** Regler erzeugen. Liefert Objekt mit .wert; ruft beiAenderung(wert) auf. */
+function regler(container, { id, name, min, max, schritt, wert, einheit = "", stellen = 2, beiAenderung }) {
+  const box = document.createElement("div");
+  box.innerHTML = `<label for="r_${id}">${name} <span class="wert" id="w_${id}"></span></label>
+                   <input type="range" id="r_${id}" min="${min}" max="${max}" step="${schritt}" value="${wert}">`;
+  container.appendChild(box);
+  const inp = box.querySelector("input"), anz = box.querySelector(".wert");
+  const r = { get wert() { return parseFloat(inp.value); },
+              setzen(v) { inp.value = v; anz.textContent = fmt(parseFloat(inp.value), stellen, einheit); },
+              sperren(an) { inp.disabled = an; } };
+  r.setzen(wert);
+  inp.addEventListener("input", () => { anz.textContent = fmt(r.wert, stellen, einheit); beiAenderung && beiAenderung(r.wert); });
+  return r;
+}
+
+/** Datei aus der Seite heraus speichern (funktioniert offline) */
+function speichern(name, inhalt, typ) {
+  const a = document.createElement("a");
+  a.href = typeof inhalt === "string" ? URL.createObjectURL(new Blob([inhalt], { type: typ })) : inhalt;
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+
+/** Mehrere Canvas nebeneinander als ein PNG speichern */
+function alsPNG(name, canvasListe) {
+  const b = canvasListe.reduce((s, c) => s + c.width, 0), h = Math.max(...canvasListe.map(c => c.height));
+  const z = document.createElement("canvas"); z.width = b; z.height = h;
+  const ctx = z.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, b, h);
+  let x = 0; for (const c of canvasListe) { ctx.drawImage(c, x, 0); x += c.width; }
+  speichern(name, z.toDataURL("image/png"));
+}
+
+/**
+ * Simulationsschleife mit festem Zeitschritt (physikalisch sauber, unabhängig von der Bildrate).
+ *   const lauf = new Schleife({dt: 0.001, schritt: dt => {...}, bild: () => {...}});
+ *   lauf.start(); lauf.pause(); lauf.tempo = 0.2 (Zeitlupe)
+ */
+class Schleife {
+  constructor({ dt, schritt, bild, beiStatus }) {
+    Object.assign(this, { dt, schritt, bild, beiStatus, laeuft: false, tempo: 1, rest: 0, tAlt: 0 });
+    const tick = tJetzt => {
+      if (this.laeuft) {
+        let echt = Math.min(0.1, (tJetzt - this.tAlt) / 1000);   // nach Tab-Wechsel nicht springen
+        this.rest += echt * this.tempo;
+        let n = 0; while (this.rest >= this.dt && n < 20000) { this.schritt(this.dt); this.rest -= this.dt; n++; }
+      }
+      this.tAlt = tJetzt; this.bild(); requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+  start() { this.laeuft = true; this.beiStatus && this.beiStatus(true); }
+  pause() { this.laeuft = false; this.beiStatus && this.beiStatus(false); }
+  umschalten() { this.laeuft ? this.pause() : this.start(); }
+  einzelschritt(dauer) { this.pause(); const n = Math.round(dauer / this.dt); for (let i = 0; i < n; i++) this.schritt(this.dt); }
+}
+
+/**
+ * Schritt-für-Schritt-Modus zum Besprechen im Plenum.
+ *   schrittmodus([{text:"…", vorbereiten: () => {...}}, ...])
+ */
+function schrittmodus(schritte) {
+  let i = 0; const box = $("schritte");
+  const zeigen = () => { $("schrittNr").textContent = `Schritt ${i + 1} von ${schritte.length}`;
+    $("schrittText").innerHTML = schritte[i].text; schritte[i].vorbereiten && schritte[i].vorbereiten();
+    $("btnZurueck").disabled = i === 0; $("btnWeiter").disabled = i === schritte.length - 1; };
+  $("btnZurueck").onclick = () => { if (i > 0) { i--; zeigen(); } };
+  $("btnWeiter").onclick = () => { if (i < schritte.length - 1) { i++; zeigen(); } };
+  return { an() { box.classList.add("an"); i = 0; zeigen(); }, aus() { box.classList.remove("an"); },
+           get aktiv() { return box.classList.contains("an"); } };
+}
+
+/** Vollbild, Beamer-Ansicht, Tastatur */
+function bedienungEinrichten(lauf, { reset, einzel }) {
+  $("btnVoll").onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  $("btnGross").onclick = () => { document.body.classList.toggle("gross"); $("btnGross").classList.toggle("aktiv"); };
+  $("btnStart").onclick = () => lauf.umschalten();
+  $("btnReset").onclick = reset;
+  $("btnSchritt").onclick = einzel;
+  $("btnLangsam").onclick = () => { lauf.tempo = lauf.tempo === 1 ? 0.2 : 1;
+    $("btnLangsam").textContent = `Zeitlupe: ${lauf.tempo === 1 ? "aus" : "an (×0,2)"}`;
+    $("btnLangsam").classList.toggle("aktiv", lauf.tempo !== 1); };
+  lauf.beiStatus = an => { $("btnStart").textContent = an ? "❚❚ Pause" : "▶ Start"; };
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT" && e.key !== " ") return;
+    const k = e.key.toLowerCase();
+    if (k === " ") { e.preventDefault(); lauf.umschalten(); }
+    else if (k === "r") reset(); else if (k === "arrowright") einzel();
+    else if (k === "l") $("btnLangsam").click(); else if (k === "g") $("btnGross").click();
+    else if (k === "f") $("btnVoll").click();
+  });
+}
+
+/* =====================================================================
+   RAUM – drehbare 3D-Darstellung (Canvas 2D, Maler-Algorithmus)
+   Koordinaten wie im Unterricht: x nach vorn, y nach rechts, z nach oben.
+   ===================================================================== */
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const len = a => Math.hypot(a[0], a[1], a[2]);
+const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+/** Ebenenpunkt A + r·u + s·v */
+const epunkt = (A, u, v, r, s) => add(A, add(mul(u, r), mul(v, s)));
+
+/** Zahl kurz und deutsch: 3 -> "3", 1.5 -> "1,5", 0.333 -> "0,33" */
+function fz(x, stellen = 2) {
+  if (!isFinite(x)) return "–";
+  if (Math.abs(x) < 1e-9) x = 0;
+  const g = Math.round(x);
+  if (Math.abs(x - g) < 1e-9) return String(g).replace("-", "−");
+  return x.toLocaleString("de-DE", { maximumFractionDigits: stellen }).replace("-", "−");
+}
+const pk = (name, P, st = 2) => `${name} (${fz(P[0], st)} | ${fz(P[1], st)} | ${fz(P[2], st)})`;
+/** Spaltenvektor als HTML */
+const vk = (a, b, c) => `<span class="vek"><span>${a}</span><span>${b}</span><span>${c}</span></span>`;
+const vkz = (P, st = 2) => vk(fz(P[0], st), fz(P[1], st), fz(P[2], st));
+/** Vektorpfeil über einem Namen (HTML) */
+const vn = n => `<span class="pf">${n}</span>`;
+const ja = t => `<span class="ja">${t}</span>`, nein = t => `<span class="nein">${t}</span>`;
+
+const FARBE = { E: "#1f5c99", F: "#d95f02", g: "#1f5c99", h: "#c62828", k: "#2e7d32", l: "#7b3294",
+                n: "#7b3294", u: "#c62828", v: "#2e7d32", punkt: "#1b2430", ok: "#2e7d32", nein: "#c62828",
+                hilfe: "#5a6675", achse: "#1b2430", boden: "#dde3ea" };
+
+class Raum {
+  constructor(canvas, opt) {
+    this.opt = Object.assign({ ziel: [0, 0, 0], radius: 6, phi: 0.5, theta: 0.35 }, opt);
+    this.cv = canvas; this.lw = leinwand(canvas); this.liste = []; this.oben = [];
+    this.zurueck(); this.zeigerEinrichten();
+  }
+  zurueck() { this.phi = this.opt.phi; this.theta = this.opt.theta; this.zoom = 1; this.heft = false; }
+  zeigerEinrichten() {
+    const cv = this.cv, zeiger = new Map(); let pinchAlt = null;
+    cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); zeiger.set(e.pointerId, [e.clientX, e.clientY]); });
+    cv.addEventListener("pointermove", e => {
+      if (!zeiger.has(e.pointerId)) return;
+      const alt = zeiger.get(e.pointerId); zeiger.set(e.pointerId, [e.clientX, e.clientY]);
+      if (zeiger.size === 1) {
+        if (this.heft) { this.heft = false; this.phi = 0.5; this.theta = 0.38; }
+        this.phi -= (e.clientX - alt[0]) * 0.008;
+        this.theta = clamp(this.theta + (e.clientY - alt[1]) * 0.008, -0.25, 1.52);
+      } else if (zeiger.size === 2) {
+        const [p, q] = [...zeiger.values()], d = Math.hypot(p[0] - q[0], p[1] - q[1]);
+        if (pinchAlt) this.zoom = clamp(this.zoom * d / pinchAlt, 0.4, 4);
+        pinchAlt = d;
+      }
+    });
+    const ende = e => { zeiger.delete(e.pointerId); pinchAlt = null; };
+    cv.addEventListener("pointerup", ende); cv.addEventListener("pointercancel", ende);
+    cv.addEventListener("wheel", e => { e.preventDefault(); this.zoom = clamp(this.zoom * Math.exp(-e.deltaY * 0.0015), 0.4, 4); }, { passive: false });
+    cv.addEventListener("dblclick", () => this.zurueck());
+  }
+  basis() {
+    const cp = Math.cos(this.phi), sp = Math.sin(this.phi), ct = Math.cos(this.theta), st = Math.sin(this.theta);
+    this.er = [-sp, cp, 0]; this.eu = [-st * cp, -st * sp, ct]; this.ed = [ct * cp, ct * sp, st];
+    const { b, h } = this.lw;
+    this.k = this.zoom * Math.min(b, h * 1.25) / (2.2 * this.opt.radius); this.mx = b / 2; this.my = h / 2;
+  }
+  /** Blickrichtung zum Betrachter (für Vorder-/Rückseite) */
+  blick() { return this.heft ? [0.8165, 0.4082, 0.4082] : this.ed; }
+  proj(P) {
+    const T = this.opt.ziel, q = [P[0] - T[0], P[1] - T[1], P[2] - T[2]];
+    let X, Y, D, f = 1;
+    if (this.heft) { X = q[1] - 0.5 * q[0]; Y = q[2] - 0.5 * q[0]; D = dot(q, [0.8165, 0.4082, 0.4082]); }
+    else { X = dot(q, this.er); Y = dot(q, this.eu); D = dot(q, this.ed); const dist = 7 * this.opt.radius; f = dist / (dist - D); }
+    return { x: this.mx + this.k * X * f, y: this.my - this.k * Y * f, t: D };
+  }
+  beginn() { this.basis(); this.liste = []; this.oben = []; }
+
+  /** Strecke (in Stücke geteilt, damit die Verdeckung stimmt) */
+  linie(A, B, { farbe = FARBE.punkt, breite = 2, strich = null, alpha = 1, teile = 14 } = {}) {
+    let off = 0, alt = this.proj(A);
+    for (let i = 1; i <= teile; i++) {
+      const neu = this.proj(lerp(A, B, i / teile));
+      this.liste.push({ art: "l", a: alt, b: neu, t: (alt.t + neu.t) / 2, farbe, breite, strich, alpha, off });
+      off += Math.hypot(neu.x - alt.x, neu.y - alt.y); alt = neu;
+    }
+  }
+  /** Gerade A + t·u für t im Bereich [t0, t1] */
+  gerade(A, u, t0, t1, opt = {}) { this.linie(add(A, mul(u, t0)), add(A, mul(u, t1)), Object.assign({ teile: 24 }, opt)); }
+  /** Pfeil (Vektor) von A nach B */
+  pfeil(A, B, { farbe = FARBE.punkt, breite = 3, spitze = 13, name = null, lage = "o" } = {}) {
+    const pa = this.proj(A), pb = this.proj(B), l = Math.hypot(pb.x - pa.x, pb.y - pa.y);
+    if (l < 2) return;
+    const w = Math.atan2(pb.y - pa.y, pb.x - pa.x), s = Math.min(spitze, l * 0.5);
+    const kurz = lerp(A, B, 1 - (s * 0.75) / l);
+    this.linie(A, kurz, { farbe, breite, teile: 8 });
+    this.liste.push({ art: "s", t: pb.t + 1e-3, farbe,
+      p: [{ x: pb.x, y: pb.y }, { x: pb.x - s * Math.cos(w - 0.42), y: pb.y - s * Math.sin(w - 0.42) },
+          { x: pb.x - s * Math.cos(w + 0.42), y: pb.y - s * Math.sin(w + 0.42) }] });
+    if (name) this.text(lerp(A, B, 0.55), name, { farbe, lage, fett: true });
+  }
+  /** Vieleck (z. B. Dreiecksfläche) */
+  flaeche(punkte, { fuell = "#888", alpha = 0.25, rand = null, randAlpha = 1, randBreite = 1.5 } = {}) {
+    const p = punkte.map(P => this.proj(P));
+    this.liste.push({ art: "f", p, t: p.reduce((s, q) => s + q.t, 0) / p.length, fuell, alpha, rand, randAlpha, randBreite });
+  }
+  /** Ebenenstück A + r·u + s·v mit Parametergitter */
+  ebene(A, u, v, [r0, r1], [s0, s1], { farbe = FARBE.E, alpha = 0.16, schritt = [1, 1], gitter = true, rand = true, name = null } = {}) {
+    const nr = Math.max(1, Math.round((r1 - r0) / schritt[0])), ns = Math.max(1, Math.round((s1 - s0) / schritt[1]));
+    const dr = (r1 - r0) / nr, ds = (s1 - s0) / ns;
+    for (let i = 0; i < nr; i++) for (let j = 0; j < ns; j++) {
+      const r = r0 + i * dr, s = s0 + j * ds;
+      this.flaeche([epunkt(A, u, v, r, s), epunkt(A, u, v, r + dr, s), epunkt(A, u, v, r + dr, s + ds), epunkt(A, u, v, r, s + ds)],
+        { fuell: farbe, alpha, rand: gitter ? farbe : null, randAlpha: 0.3, randBreite: 1 });
+    }
+    if (rand) {
+      const E = [epunkt(A, u, v, r0, s0), epunkt(A, u, v, r1, s0), epunkt(A, u, v, r1, s1), epunkt(A, u, v, r0, s1)];
+      for (let i = 0; i < 4; i++) this.linie(E[i], E[(i + 1) % 4], { farbe, breite: 1.5, alpha: 0.8, teile: 10 });
+    }
+    if (name) this.text(epunkt(A, u, v, r1, s1), name, { farbe, fett: true, groesse: 17, lage: "or" });
+  }
+  /** Punkt mit Beschriftung (immer obenauf) */
+  punkt(P, { farbe = FARBE.punkt, name = null, radius = 5, lage = "or", hohl = false, groesse = 15 } = {}) {
+    const p = this.proj(P);
+    this.oben.push({ t: p.t, zeichne: ctx => {
+      ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, 7);
+      if (hohl) { ctx.fillStyle = "#fff"; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = farbe; ctx.stroke(); }
+      else { ctx.fillStyle = farbe; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = "#fff"; ctx.stroke(); }
+    } });
+    if (name) this.text(P, name, { farbe, lage, fett: true, groesse, abstand: radius + 4 });
+  }
+  /** Beschriftung an einem Raumpunkt; lage: o, u, l, r, ol, or, ul, ur, m */
+  text(P, txt, { farbe = FARBE.punkt, lage = "or", fett = false, groesse = 15, abstand = 6, hintergrund = true } = {}) {
+    const p = this.proj(P);
+    const dx = lage.includes("r") ? 1 : lage.includes("l") ? -1 : 0, dy = lage.includes("o") ? -1 : lage.includes("u") ? 1 : 0;
+    const ausrichtung = dx > 0 ? "left" : dx < 0 ? "right" : "center";
+    this.oben.push({ t: p.t + 1e3, zeichne: ctx => textMitPfeil(ctx, txt, p.x + dx * abstand, p.y + dy * (abstand + fs(groesse) * 0.55),
+      { farbe, groesse, ausrichtung, fett, hintergrund }) });
+  }
+  /** eigenes Bildchen (Hütte, Scheinwerfer …) an einem Raumpunkt */
+  bildchen(P, zeichne) { const p = this.proj(P); this.oben.push({ t: p.t - 1e-3, zeichne: ctx => zeichne(ctx, p.x, p.y) }); }
+  /** Koordinatenachsen mit Einteilung */
+  achsen({ x = [0, 5], y = [0, 5], z = [0, 5], beschr = 1, marke = 0.12 } = {}) {
+    const A = [[x, [1, 0, 0], "x"], [y, [0, 1, 0], "y"], [z, [0, 0, 1], "z"]];
+    for (const [[a, b], e, n] of A) {
+      this.pfeil(mul(e, a), mul(e, b + 0.6), { farbe: FARBE.achse, breite: 1.6, spitze: 11 });
+      this.text(mul(e, b + 0.9), n, { farbe: FARBE.achse, fett: true, groesse: 16, lage: "m", hintergrund: false });
+      for (let i = Math.ceil(a); i <= b; i++) {
+        if (i === 0 || i % beschr) continue;
+        const q = n === "z" ? [0, marke, 0] : [0, 0, marke];
+        this.linie(add(mul(e, i), q), sub(mul(e, i), q), { farbe: FARBE.achse, breite: 1.2, teile: 1 });
+        this.text(mul(e, i), String(i).replace("-", "−"), { farbe: FARBE.hilfe, groesse: 11, lage: n === "z" ? "l" : "u", abstand: 4, hintergrund: false });
+      }
+    }
+  }
+  /** Gitter auf dem Boden (z = 0) */
+  boden([x0, x1], [y0, y1], schritt = 1, farbe = FARBE.boden) {
+    for (let x = x0; x <= x1 + 1e-9; x += schritt) this.linie([x, y0, 0], [x, y1, 0], { farbe, breite: 1, teile: 6 });
+    for (let y = y0; y <= y1 + 1e-9; y += schritt) this.linie([x0, y, 0], [x1, y, 0], { farbe, breite: 1, teile: 6 });
+  }
+  render() {
+    const { ctx, b, h } = this.lw;
+    ctx.clearRect(0, 0, b, h); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, b, h);
+    this.liste.sort((p, q) => p.t - q.t);
+    for (const o of this.liste) {
+      if (o.art === "f" || o.art === "s") {
+        ctx.beginPath(); o.p.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath();
+        if (o.art === "s") { ctx.fillStyle = o.farbe; ctx.fill(); continue; }
+        if (o.fuell) { ctx.globalAlpha = o.alpha; ctx.fillStyle = o.fuell; ctx.fill(); }
+        if (o.rand) { ctx.globalAlpha = o.randAlpha; ctx.strokeStyle = o.rand; ctx.lineWidth = o.randBreite; ctx.stroke(); }
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.globalAlpha = o.alpha; ctx.strokeStyle = o.farbe; ctx.lineWidth = o.breite;
+        ctx.lineCap = o.strich ? "butt" : "round"; ctx.setLineDash(o.strich || []); ctx.lineDashOffset = o.off;
+        ctx.beginPath(); ctx.moveTo(o.a.x, o.a.y); ctx.lineTo(o.b.x, o.b.y); ctx.stroke();
+        ctx.setLineDash([]); ctx.globalAlpha = 1;
+      }
+    }
+    this.oben.sort((p, q) => p.t - q.t);
+    for (const o of this.oben) o.zeichne(ctx);
+  }
+}
+
+/** Beschriftung auf der Leinwand; {AB} bekommt einen Vektorpfeil */
+function textMitPfeil(ctx, txt, x, y, o) {
+  const roh = txt.replace(/[{}]/g, "");
+  beschriftung(ctx, roh, x, y, o);
+  if (!txt.includes("{")) return;
+  ctx.save(); const g = fs(o.groesse); ctx.font = `${o.fett ? "600 " : ""}${g}px ${css("--schrift")}`;
+  const w = ctx.measureText(roh).width;
+  const x0 = o.ausrichtung === "center" ? x - w / 2 : o.ausrichtung === "right" ? x - w : x;
+  const re = /\{([^}]*)\}/g; let m;
+  while ((m = re.exec(txt))) {
+    const vor = txt.slice(0, m.index).replace(/[{}]/g, "");
+    const xa = x0 + ctx.measureText(vor).width, xb = xa + ctx.measureText(m[1]).width, yy = y - g * 0.66;
+    pfeil(ctx, xa, yy, xb + 2, yy, o.farbe, 1.4, 5);
+  }
+  ctx.restore();
+}
+
+/** Kürzeste Verbindung zweier Geraden P + s·u und Q + t·v (für windschiefe Geraden) */
+function gemeinlot(P, u, Q, v) {
+  const w = sub(P, Q), a = dot(u, u), b = dot(u, v), c = dot(v, v), d = dot(u, w), e = dot(v, w), N = a * c - b * b;
+  if (Math.abs(N) < 1e-12) return null;
+  const s = (b * e - c * d) / N, t = (a * e - b * d) / N;
+  const X = add(P, mul(u, s)), Y = add(Q, mul(v, t));
+  return { s, t, X, Y, abstand: len(sub(X, Y)) };
+}
+/** r und s mit A + r·u + s·v = X (kleinste Quadrate) und Abweichung */
+function ebenenParameter(A, u, v, X) {
+  const w = sub(X, A), a = dot(u, u), b = dot(u, v), c = dot(v, v), d = dot(u, w), e = dot(v, w), N = a * c - b * b;
+  const r = (c * d - b * e) / N, s = (a * e - b * d) / N;
+  return { r, s, abw: len(sub(X, epunkt(A, u, v, r, s))) };
+}
+
+/* =====================================================================
+   MODELL – Inhalt der Aufgabe (aus modell_1.js)
+   ===================================================================== */
+const R = {};
+/* Probeklausuraufgabe 1 – Glaspyramide vor einem Museum (1 LE = 1 m) */
+const DATEINAME = "probeklausur1_glaspyramide";
+const KAMERA = { ziel: [4, 2.5, 2.6], radius: 7.6, phi: 0.55, theta: 0.32 };
+
+const A = [0, 0, 0], B = [8, 0, 0], C = [8, 8, 0], D = [0, 8, 0], S = [4, 4, 6];
+const AB = sub(B, A), AS = sub(S, A);
+const L = [5, 1, 1.5], ROB = [6, 2, 3], P0 = [6, 2, 0];
+const Q = [4, -4, 0], RL = [0, 2, 1], PL = [4, 2, 3];
+const LICHT = "#d99100";
+const Z = { r: 0.5, s: 0.25, a: -4 };
+
+R.r = regler($("regler"), { id: "r", name: "Parameter r", min: -0.5, max: 1.5, schritt: 0.05, wert: Z.r, stellen: 2,
+                            beiAenderung: v => { Z.r = v; } });
+R.s = regler($("regler"), { id: "s", name: "Parameter s", min: -0.5, max: 1.5, schritt: 0.05, wert: Z.s, stellen: 2,
+                            beiAenderung: v => { Z.s = v; } });
+R.a = regler($("regler"), { id: "a", name: "Lage des Scheinwerfers a", min: -12, max: 4, schritt: 0.5, wert: Z.a, stellen: 1,
+                            beiAenderung: v => { Z.a = v; } });
+const setze = w => { for (const k in w) { Z[k] = w[k]; R[k].setzen(w[k]); } };
+
+/* ---------- Bausteine der Zeichnung ---------- */
+function pyramide(raum, { glas = true, bcs = false } = {}) {
+  raum.flaeche([A, B, C, D], { fuell: "#9aa5b1", alpha: 0.12 });
+  raum.flaeche([B, C, S], { fuell: bcs ? FARBE.F : "#9aa5b1", alpha: bcs ? 0.3 : 0.1 });
+  raum.flaeche([C, D, S], { fuell: "#9aa5b1", alpha: 0.1 });
+  raum.flaeche([D, A, S], { fuell: "#9aa5b1", alpha: 0.1 });
+  raum.flaeche([A, B, S], { fuell: glas ? "#4f97d6" : "#9aa5b1", alpha: glas ? 0.32 : 0.1 });
+  for (const [P, Q2] of [[A, B], [B, C], [C, D], [D, A], [A, S], [B, S], [C, S], [D, S]])
+    raum.linie(P, Q2, { farbe: "#3c4a5a", breite: 2 });
+  raum.punkt(A, { name: "A", lage: "ol" }); raum.punkt(B, { name: "B", lage: "ul" });
+  raum.punkt(C, { name: "C", lage: "ur" }); raum.punkt(D, { name: "D", lage: "or" });
+  raum.punkt(S, { name: "S", lage: "o" });
+}
+function ebeneE(raum, rb = [-0.25, 1.25], sb = [-0.15, 1.15], alpha = 0.12) {
+  raum.ebene(A, AB, AS, rb, sb, { farbe: FARBE.E, alpha, schritt: [0.25, 0.25], name: "E" });
+}
+function spannvektoren(raum) {
+  raum.pfeil(A, B, { farbe: FARBE.u, name: "{AB}", lage: "u" });
+  raum.pfeil(A, S, { farbe: FARBE.v, name: "{AS}", lage: "ol" });
+}
+const imDreieck = (r, s) => r >= -1e-9 && s >= -1e-9 && r + s <= 1 + 1e-9;
+function strahl(raum, Qp, tEnde, { farbe = LICHT, voll = true } = {}) {
+  raum.linie(Qp, add(Qp, mul(RL, tEnde)), { farbe, breite: 4, alpha: voll ? 1 : 0.9 });
+  raum.bildchen(Qp, (ctx, x, y) => { ctx.fillStyle = "#3c4a5a"; ctx.fillRect(x - 9, y - 4, 18, 8);
+    ctx.fillStyle = LICHT; ctx.beginPath(); ctx.arc(x, y - 4, 5, Math.PI, 0); ctx.fill(); });
+}
+
+/* ---------- Teilaufgaben ---------- */
+const TEILE = [
+  { knopf: "a)", titel: "a) Höhe, Kante AS, Zeichnung",
+    text: "Geben Sie die Höhe der Pyramide an, berechnen Sie die Länge der Kante AS und zeichnen Sie die Pyramide.",
+    legende: [["#4f97d6", "Glasscheibe ABS"], [FARBE.v, "Kante AS"]],
+    zeilen: [
+      "(1) <i>S</i> (4 | 4 | 6) hat die <i>z</i>-Koordinate 6.",
+      "<span class='ergebnis'>Die Pyramide ist 6 m hoch.</span>",
+      `(2) <span class='pf'>AS</span> = ${vk(4, 4, 6)}`,
+      "|<span class='pf'>AS</span>| = √(4² + 4² + 6²) = √68 ≈ 8,25",
+      "<span class='ergebnis'>Die Kante AS ist etwa 8,25 m lang.</span>",
+      "(3) Erst das Quadrat <i>ABCD</i> auf dem Boden, dann <i>S</i>: 4 nach vorn, 4 nach rechts, 6 nach oben. Tipp: „Heft-Ansicht“ zeigt das Bild wie im Heft."],
+    messwerte: () => `<div><b>Höhe</b> h = 6 m</div><div><b>|<span class='pf'>AS</span>|</b> = √68 ≈ ${fmt(Math.sqrt(68), 2, "m")}</div>` },
+
+  { knopf: "b)", titel: "b) Ebene E durch A, B und S",
+    text: "Stellen Sie eine Gleichung der Ebene <i>E</i> durch <i>A</i>, <i>B</i> und <i>S</i> auf. Mit den Reglern <i>r</i> und <i>s</i> wandert ein Punkt <i>X</i> durch die Ebene.",
+    regler: ["r", "s"], start: () => setze({ r: 0.5, s: 0.5 }),
+    legende: [[FARBE.u, "Spannvektor <span class='pf'>AB</span>"], [FARBE.v, "Spannvektor <span class='pf'>AS</span>"], [FARBE.E, "Ebene E (Parametergitter)"]],
+    zeilen: [
+      `<span class='pf'>AB</span> = ${vk(8, 0, 0)},  <span class='pf'>AS</span> = ${vk(4, 4, 6)}`,
+      "Kollinear? <span class='pf'>AS</span> = <i>k</i>·<span class='pf'>AB</span>: erste Zeile <i>k</i> = 0,5, zweite Zeile 4 ≠ 0,5·0",
+      "<i>A</i>, <i>B</i>, <i>S</i> liegen nicht auf einer Geraden.",
+      `<span class='ergebnis'><i>E</i>: <span class='pf'>x</span> = ${vk(0, 0, 0)} + <i>r</i>·${vk(8, 0, 0)} + <i>s</i>·${vk(4, 4, 6)}</span>`],
+    messwerte: () => { const X = epunkt(A, AB, AS, Z.r, Z.s);
+      return `<div><b>r</b> = ${fz(Z.r)}, <b>s</b> = ${fz(Z.s)}</div><div><b>${pk("X", X)}</b></div>`; } },
+
+  { knopf: "c)", titel: "c) Lampe L und Reinigungsroboter",
+    text: "Zeigen Sie, dass <i>L</i> (5 | 1 | 1,5) in <i>E</i> liegt, und prüfen Sie, ob <i>L</i> auf der Scheibe liegt. Bestimmen Sie die Höhe des Roboters über <i>P</i><sub>0</sub> (6 | 2 | 0). Mit <i>r</i> und <i>s</i> testen Sie die Bedingung für das Dreieck.",
+    regler: ["r", "s"], start: () => setze({ r: 0.5, s: 0.25 }),
+    legende: [["#4f97d6", "Glasscheibe ABS"], [FARBE.ok, "X auf der Scheibe"], [FARBE.nein, "X neben der Scheibe"]],
+    zeilen: [
+      `(1) ${vk(5, 1, "1,5")} = <i>r</i>·${vk(8, 0, 0)} + <i>s</i>·${vk(4, 4, 6)}`,
+      "II: 1 = 4<i>s</i> ⇒ <i>s</i> = 0,25    I: 5 = 8<i>r</i> + 1 ⇒ <i>r</i> = 0,5",
+      "III: 1,5 = 6·0,25 = 1,5 <span class='ergebnis'>wahr: L liegt in E.</span>",
+      "(2) <i>r</i> = 0,5 ≥ 0,  <i>s</i> = 0,25 ≥ 0,  <i>r</i> + <i>s</i> = 0,75 ≤ 1",
+      "<span class='ergebnis'>L liegt auf der Glasscheibe.</span>",
+      `(3) ${vk(6, 2, "<i>z</i>")} = <i>r</i>·${vk(8, 0, 0)} + <i>s</i>·${vk(4, 4, 6)}`,
+      "II: <i>s</i> = 0,5    I: 6 = 8<i>r</i> + 2 ⇒ <i>r</i> = 0,5    III: <i>z</i> = 6·0,5 = 3",
+      "<span class='ergebnis'>Der Roboter ist in 3 m Höhe.</span>"],
+    messwerte: () => { const X = epunkt(A, AB, AS, Z.r, Z.s), d = imDreieck(Z.r, Z.s);
+      return `<div><b>${pk("X", X)}</b></div><div><b>r</b> = ${fz(Z.r)}, <b>s</b> = ${fz(Z.s)}, <b>r + s</b> = ${fz(Z.r + Z.s)}</div>
+              <div>X auf der Scheibe: ${d ? ja("ja") : nein("nein")}</div>`; } },
+
+  { knopf: "d)", titel: "d) Glasfläche mit dem Vektorprodukt",
+    text: "Berechnen Sie <span class='pf'>AB</span> × <span class='pf'>AS</span> und daraus, wie viel Glas für alle vier Seitenflächen nötig ist.",
+    legende: [[FARBE.u, "<span class='pf'>AB</span>"], [FARBE.v, "<span class='pf'>AS</span>"], [FARBE.n, "<span class='pf'>AB</span> × <span class='pf'>AS</span> (verkürzt auf 1/16)"], ["#9aa5b1", "Parallelogramm = 2 Dreiecke"]],
+    zeilen: [
+      `<span class='pf'>AB</span> × <span class='pf'>AS</span> = ${vk(8, 0, 0)} × ${vk(4, 4, 6)} = ${vk("0·6 − 0·4", "0·4 − 8·6", "8·4 − 0·4")} = ${vk(0, "−48", 32)}`,
+      "|<span class='pf'>AB</span> × <span class='pf'>AS</span>| = √(0 + 2304 + 1024) = √3328 ≈ 57,69  (Fläche des Parallelogramms)",
+      "Dreieck <i>ABS</i>: ½ · 57,69 ≈ 28,84 m²",
+      "<span class='ergebnis'>Vier Seitenflächen: 4 · 28,84 ≈ 115,4 m² Glas.</span>"],
+    messwerte: () => `<div><b><span class='pf'>AB</span> × <span class='pf'>AS</span></b> = (0 | −48 | 32)</div><div><b>A</b><sub>ABS</sub> ≈ 28,84 m²</div><div><b>gesamt</b> ≈ 115,4 m²</div>` },
+
+  { knopf: "e)", titel: "e) Lichtstrahl trifft die Scheibe",
+    text: "Der Scheinwerfer in <i>Q</i> (4 | −4 | 0) strahlt entlang <i>g</i>: <span class='pf'>x</span> = (4 | −4 | 0) + <i>t</i>·(0 | 2 | 1). Berechnen Sie den Punkt <i>P</i> auf <i>E</i> und prüfen Sie, ob er auf der Scheibe liegt. Start lässt den Strahl laufen.",
+    legende: [[LICHT, "Lichtstrahl g"], ["#4f97d6", "Glasscheibe ABS"]],
+    animation: t => { Zt.strahl = Math.min(1, (t % 4) / 2.5); },
+    start: () => { Zt.strahl = 1; },
+    zeilen: [
+      `${vk(4, "−4", 0)} + <i>t</i>·${vk(0, 2, 1)} = <i>r</i>·${vk(8, 0, 0)} + <i>s</i>·${vk(4, 4, 6)}`,
+      "I: 4 = 8<i>r</i> + 4<i>s</i>    II: −4 + 2<i>t</i> = 4<i>s</i>    III: <i>t</i> = 6<i>s</i>",
+      "III in II: −4 + 12<i>s</i> = 4<i>s</i> ⇒ <i>s</i> = 0,5, <i>t</i> = 3",
+      "I: 4 = 8<i>r</i> + 2 ⇒ <i>r</i> = 0,25",
+      `<span class='pf'>OP</span> = ${vk(4, "−4", 0)} + 3·${vk(0, 2, 1)} = ${vk(4, 2, 3)} <span class='ergebnis'>P (4 | 2 | 3)</span>`,
+      "<i>r</i> + <i>s</i> = 0,75 ≤ 1, beide ≥ 0: <span class='ergebnis'>Der Strahl trifft die Scheibe in 3 m Höhe.</span>"],
+    messwerte: () => { const t = 3 * (Zt.strahl ?? 1); const X = add(Q, mul(RL, t));
+      return `<div><b>t</b> = ${fz(t)}</div><div><b>${pk("Lichtspitze", X)}</b></div>`; } },
+
+  { knopf: "f)", titel: "f) Liegt BCS auch in E?",
+    text: "Ghaith: „Die Scheibe <i>BCS</i> liegt auch in <i>E</i>, weil sie <i>B</i> und <i>S</i> mit <i>ABS</i> gemeinsam hat.“ Beurteilen Sie das.",
+    legende: [[FARBE.E, "Ebene E (vergrößert)"], [FARBE.F, "Scheibe BCS"]],
+    zeilen: [
+      "Punktprobe mit <i>C</i> (8 | 8 | 0):",
+      "II: 8 = 4<i>s</i> ⇒ <i>s</i> = 2    III: 0 = 6·2 = 12 <span class='falsch'>Widerspruch</span>",
+      "Über <i>C</i> liegt die Ebene <i>E</i> erst in 12 m Höhe, im Punkt (8 | 8 | 12).",
+      "<span class='ergebnis'>Die Aussage ist falsch: Durch B und S gehen unendlich viele Ebenen.</span>"],
+    messwerte: () => `<div><b>C</b> (8 | 8 | 0)</div><div><b>E über C</b>: (8 | 8 | 12)</div>` },
+
+  { knopf: "g)", titel: "g) Transfer: Scheinwerfer verschieben",
+    text: "Der Scheinwerfer steht in <i>Q<sub>a</sub></i> (4 | <i>a</i> | 0) und strahlt in Richtung (0 | 2 | 1). Für welche <i>a</i> trifft der Strahl die Scheibe <i>ABS</i>? Start lässt <i>a</i> automatisch wandern.",
+    regler: ["a"], start: () => setze({ a: -4 }),
+    animation: t => { const a = Math.round((-4 - 7 * Math.cos(0.6 * t)) * 2) / 2; if (a !== Z.a) setze({ a }); },
+    legende: [[LICHT, "Lichtstrahl"], [FARBE.ok, "Scheinwerfer-Positionen mit Treffer"], [FARBE.nein, "kein Treffer"]],
+    zeilen: [
+      "I: 4 = 8<i>r</i> + 4<i>s</i>    II: <i>a</i> + 2<i>t</i> = 4<i>s</i>    III: <i>t</i> = 6<i>s</i>",
+      "III in II: <i>a</i> + 12<i>s</i> = 4<i>s</i> ⇒ <i>s</i> = −<i>a</i>/8",
+      "I: 8<i>r</i> = 4 − 4<i>s</i> ⇒ <i>r</i> = ½ + <i>a</i>/16",
+      "<i>s</i> ≥ 0 ⇒ <i>a</i> ≤ 0    <i>r</i> ≥ 0 ⇒ <i>a</i> ≥ −8    <i>r</i> + <i>s</i> = ½ − <i>a</i>/16 ≤ 1 ⇒ <i>a</i> ≥ −8",
+      "<span class='ergebnis'>Treffer für −8 ≤ a ≤ 0:</span> Der Scheinwerfer steht auf der Strecke von (4 | −8 | 0) bis (4 | 0 | 0).",
+      "Für <i>a</i> = −8 trifft er genau die Spitze <i>S</i>, für <i>a</i> = 0 die Mitte der Kante <i>AB</i>."],
+    messwerte: () => { const s = -Z.a / 8, r = 0.5 + Z.a / 16, d = imDreieck(r, s);
+      return `<div><b>a</b> = ${fz(Z.a)}</div><div><b>r</b> = ${fz(r, 3)}, <b>s</b> = ${fz(s, 3)}</div>
+              <div><b>r + s</b> = ${fz(r + s, 3)}</div><div>Treffer: ${d ? ja("ja") : nein("nein")}</div>`; } },
+];
+
+/* ---------- Zeichnen ---------- */
+function zeichnen(raum, tl) {
+  const id = tl.knopf;
+  raum.boden([-1, 10], id === "g)" ? [-13, 10] : [-5, 10], 1);
+  raum.achsen({ x: [0, 9], y: [id === "g)" ? -12 : -4, 10], z: [0, 7], beschr: 2 });
+  pyramide(raum, { glas: true, bcs: id === "f)" });
+
+  if (id === "a)") {
+    raum.linie(S, [4, 4, 0], { farbe: FARBE.hilfe, breite: 2, strich: [6, 5] });
+    raum.punkt([4, 4, 0], { radius: 3, farbe: FARBE.hilfe });
+    raum.text([4, 4, 3], "h = 6 m", { farbe: FARBE.hilfe, lage: "r", fett: true });
+    raum.pfeil(A, S, { farbe: FARBE.v, breite: 4, name: "|{AS}| ≈ 8,25 m", lage: "ol" });
+  }
+  if (id === "b)" || id === "c)") {
+    ebeneE(raum, [-0.5, 1.5], [-0.5, 1.5], id === "b)" ? 0.12 : 0.07);
+    const X = epunkt(A, AB, AS, Z.r, Z.s), X1 = add(A, mul(AB, Z.r));
+    if (id === "b)") {
+      spannvektoren(raum);
+      raum.linie(A, X1, { farbe: FARBE.u, breite: 2.5, strich: [7, 5] });
+      raum.linie(X1, X, { farbe: FARBE.v, breite: 2.5, strich: [7, 5] });
+      raum.punkt(X, { name: "X", farbe: FARBE.E, radius: 6 });
+    } else {
+      const d = imDreieck(Z.r, Z.s);
+      raum.punkt(X, { name: "X", farbe: d ? FARBE.ok : FARBE.nein, radius: 6, lage: "ul" });
+      raum.punkt(L, { name: "L (5 | 1 | 1,5)", lage: "ol" });
+      raum.linie(P0, ROB, { farbe: FARBE.hilfe, breite: 2, strich: [6, 5] });
+      raum.punkt(P0, { name: "P₀", radius: 3.5, farbe: FARBE.hilfe, lage: "ur" });
+      raum.bildchen(ROB, (ctx, x, y) => { ctx.fillStyle = "#3c4a5a"; ctx.fillRect(x - 11, y - 7, 22, 14);
+        ctx.fillStyle = "#fff"; ctx.fillRect(x - 6, y - 3, 4, 4); ctx.fillRect(x + 2, y - 3, 4, 4); });
+      raum.text(ROB, "Roboter (6 | 2 | 3)", { lage: "r", abstand: 16, fett: true });
+      raum.text([6, 2, 1.5], "3 m", { farbe: FARBE.hilfe, lage: "r" });
+    }
+  }
+  if (id === "d)") {
+    const BS = add(B, AS);
+    raum.flaeche([A, B, BS, S], { fuell: "#9aa5b1", alpha: 0.12 });
+    raum.linie(B, BS, { farbe: FARBE.hilfe, breite: 1.5, strich: [6, 5] });
+    raum.linie(S, BS, { farbe: FARBE.hilfe, breite: 1.5, strich: [6, 5] });
+    spannvektoren(raum);
+    const M = mul(add(add(A, B), S), 1 / 3), n = mul(cross(AB, AS), 1 / 16);
+    raum.pfeil(M, add(M, n), { farbe: FARBE.n, breite: 3.5, name: "{AB} × {AS}", lage: "l" });
+    raum.text(lerp(A, BS, 0.5), "Parallelogramm", { farbe: FARBE.hilfe, lage: "r" });
+  }
+  if (id === "e)") {
+    ebeneE(raum, [-0.25, 1.25], [-0.15, 1.15], 0.07);
+    const anteil = Zt.strahl ?? 1;
+    strahl(raum, Q, 3 * anteil);
+    if (anteil >= 1) { raum.linie(PL, add(Q, mul(RL, 5)), { farbe: LICHT, breite: 2, strich: [5, 5] });
+      raum.punkt(PL, { name: "P (4 | 2 | 3)", farbe: FARBE.ok, radius: 6, lage: "l" }); }
+    raum.punkt(Q, { name: "Q", radius: 3.5, lage: "ul" });
+    raum.text(add(Q, mul(RL, 1.6)), "g", { farbe: LICHT, fett: true, lage: "r", groesse: 17 });
+  }
+  if (id === "f)") {
+    ebeneE(raum, [-0.3, 1.3], [-0.1, 2.15], 0.1);
+    raum.linie(C, [8, 8, 12], { farbe: FARBE.nein, breite: 2, strich: [6, 5] });
+    raum.punkt([8, 8, 12], { name: "(8 | 8 | 12) in E", farbe: FARBE.E, lage: "r" });
+    raum.text([8, 8, 6], "12 m", { farbe: FARBE.nein, lage: "r", fett: true });
+  }
+  if (id === "g)") {
+    raum.linie([4, -8, 0], [4, 0, 0], { farbe: FARBE.ok, breite: 6, alpha: 0.6 });
+    raum.linie([4, -12, 0], [4, -8, 0], { farbe: FARBE.nein, breite: 3, alpha: 0.35 });
+    raum.linie([4, 0, 0], [4, 4, 0], { farbe: FARBE.nein, breite: 3, alpha: 0.35 });
+    const Qa = [4, Z.a, 0], s = -Z.a / 8, r = 0.5 + Z.a / 16, t = 6 * s, d = imDreieck(r, s);
+    if (t >= 0 && d) {
+      const P = add(Qa, mul(RL, t));
+      strahl(raum, Qa, t);
+      raum.linie(P, add(P, mul(RL, 1.5)), { farbe: LICHT, breite: 2, strich: [5, 5] });
+      raum.punkt(P, { name: pk("P", P), farbe: FARBE.ok, radius: 6, lage: "l" });
+    } else {
+      strahl(raum, Qa, 10);
+      if (t >= 0) { const P = add(Qa, mul(RL, t)); raum.punkt(P, { name: "trifft E neben der Scheibe", farbe: FARBE.nein, hohl: true, lage: "r" }); }
+    }
+    raum.punkt(Qa, { name: "Qₐ", radius: 3.5, lage: "ul" });
+  }
+}
+
+const INFO = `
+  <p>Die Glaspyramide aus der Probeklausuraufgabe 1: Grundfläche <i>A</i> (0 | 0 | 0), <i>B</i> (8 | 0 | 0),
+  <i>C</i> (8 | 8 | 0), <i>D</i> (0 | 8 | 0), Spitze <i>S</i> (4 | 4 | 6), 1 LE = 1 m. Die blau getönte
+  Fläche ist die Glasscheibe <i>ABS</i>.</p>
+  <p>Wählen Sie oben die Teilaufgabe. Die Ansicht zeigt nur, was für diese Teilaufgabe wichtig ist. Die Rechnung rechts
+  lässt sich Zeile für Zeile aufdecken – so kann man erst selbst rechnen und dann vergleichen.</p>
+  <p>Die Ebene <i>E</i> ist mit ihrem Parametergitter gezeichnet: Jede Gitterlinie gehört zu einem festen Wert von
+  <i>r</i> oder <i>s</i> (Schrittweite 0,25). So sieht man, dass <i>E</i> über die Scheibe hinausgeht und die Scheibe
+  genau der Bereich <i>r</i> ≥ 0, <i>s</i> ≥ 0, <i>r</i> + <i>s</i> ≤ 1 ist.</p>
+  <p class="klein">Der Vektor <span class='pf'>AB</span> × <span class='pf'>AS</span> ist auf 1/16 verkürzt gezeichnet, damit er ins Bild passt.</p>`;
+
+
+/* =====================================================================
+   START – Teilaufgaben, Rechnung, Schleife, Bedienung
+   ===================================================================== */
+const raum = new Raum($("szene"), KAMERA);
+const Zt = { t: 0 };                // Animationszeit der aktuellen Teilaufgabe
+let teil = 0, zeilen = 0, drehen = true, letzteMesswerte = "";
+
+for (const [i, tl] of TEILE.entries()) {
+  const k = document.createElement("button"); k.textContent = tl.knopf; k.title = tl.titel.replace(/<[^>]+>/g, "");
+  k.onclick = () => teilZeigen(i); $("teilKnoepfe").appendChild(k);
+}
+function reglerBox(id) { return $("r_" + id).parentElement; }
+function teilZeigen(i) {
+  lauf.pause(); teil = i; zeilen = 0; Zt.t = 0;
+  const tl = TEILE[i];
+  [...$("teilKnoepfe").children].forEach((k, j) => k.classList.toggle("aktiv", j === i));
+  $("aufgabeText").innerHTML = `<b>${tl.titel}</b><br>${tl.text}`;
+  const ids = tl.regler || [];
+  for (const id in R) reglerBox(id).style.display = ids.includes(id) ? "" : "none";
+  $("reglerLeer").style.display = ids.length ? "none" : "";
+  $("legende").innerHTML = (tl.legende || []).map(([f, t]) =>
+    `<span><span class="farbstrich" style="background:${f}"></span>${t}</span>`).join("");
+  tl.start && tl.start();
+  $("btnTeilZurueck").disabled = i === 0; $("btnTeilWeiter").disabled = i === TEILE.length - 1;
+  rechnungZeigen();
+}
+function rechnungZeigen() {
+  const z = TEILE[teil].zeilen;
+  $("rechnung").innerHTML = z.slice(0, zeilen).map(s => `<div class="rz">${s}</div>`).join("") +
+    (zeilen < z.length ? `<p class="klein">${zeilen ? "Weiter" : "Rechnung aufdecken"} mit „nächste Zeile“ (noch ${z.length - zeilen} ${z.length - zeilen === 1 ? "Zeile" : "Zeilen"}).</p>` : "");
+  $("btnZeile").disabled = zeilen >= z.length;
+  const bx = $("rechnung"); bx.scrollTop = bx.scrollHeight;
+}
+$("btnZeile").onclick = () => { zeilen = Math.min(TEILE[teil].zeilen.length, zeilen + 1); rechnungZeigen(); };
+$("btnAlle").onclick = () => { zeilen = TEILE[teil].zeilen.length; rechnungZeigen(); };
+$("btnVerdecken").onclick = () => { zeilen = 0; rechnungZeigen(); };
+$("btnTeilZurueck").onclick = () => teil > 0 && teilZeigen(teil - 1);
+$("btnTeilWeiter").onclick = () => teil < TEILE.length - 1 && teilZeigen(teil + 1);
+$("btnDrehen").onclick = () => { drehen = !drehen; $("btnDrehen").textContent = `Drehen: ${drehen ? "an" : "aus"}`;
+  $("btnDrehen").classList.toggle("aktiv", drehen); };
+$("btnHeft").onclick = () => { raum.heft = !raum.heft; if (raum.heft) { drehen = true; $("btnDrehen").click(); } };
+$("btnAnsicht").onclick = () => raum.zurueck();
+$("btnPNG").onclick = () => alsPNG(DATEINAME + ".png", [$("szene")]);
+$("btnDrehen").classList.add("aktiv");
+
+function bild() {
+  $("btnHeft").classList.toggle("aktiv", raum.heft);
+  raum.beginn(); zeichnen(raum, TEILE[teil]); raum.render();
+  const m = TEILE[teil].messwerte ? TEILE[teil].messwerte() : "";
+  if (m !== letzteMesswerte) { $("messwerte").innerHTML = m; letzteMesswerte = m; }
+}
+const lauf = new Schleife({ dt: 1 / 120, bild,
+  schritt: dt => { Zt.t += dt; if (drehen && !raum.heft) raum.phi += 0.22 * dt; TEILE[teil].animation && TEILE[teil].animation(Zt.t, dt); } });
+bedienungEinrichten(lauf, { reset: () => { raum.zurueck(); teilZeigen(teil); }, einzel: () => lauf.einzelschritt(0.05) });
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  const k = e.key.toLowerCase();
+  if (k === "n") $("btnZeile").click(); else if (k === "a") $("btnAlle").click(); else if (k === "v") $("btnVerdecken").click();
+  else if (k === "pagedown") { e.preventDefault(); $("btnTeilWeiter").click(); }
+  else if (k === "pageup") { e.preventDefault(); $("btnTeilZurueck").click(); }
+  else if (k === "d") $("btnDrehen").click(); else if (k === "h") $("btnHeft").click();
+});
+$("infoText").innerHTML = INFO;
+teilZeigen(0);
+</script>
+</body>
+</html>
